@@ -53,11 +53,9 @@ languages = {
 }
 
 
-
 class dict(StatesGroup):
     first_language = State()
     second_language = State()
-
 
 
 async def check_user(user_id: int) -> bool:
@@ -69,7 +67,6 @@ async def check_user(user_id: int) -> bool:
 
 @user_private_router.message(CommandStart())
 async def cmd_start(message: types.Message):
-
     await check_user(message.from_user.id)
 
     start_message = await message.answer(
@@ -86,7 +83,6 @@ async def cmd_start(message: types.Message):
 
 @user_private_router.callback_query(F.data == "view_dicts")
 async def view_dicts(callback: CallbackQuery):
-
     user_dictionaries = await db.get_user_dictionaries(callback.from_user.id)
 
     # Display the user's dictionaries
@@ -104,7 +100,7 @@ async def view_dicts(callback: CallbackQuery):
                                          btns=btns,
                                          sizes=calc_dict_btns(dictionaries)
                                      )
-									)
+                                     )
 
 
 @user_private_router.callback_query(F.data == "add_dict")
@@ -135,10 +131,11 @@ async def delete_dict(callback: CallbackQuery):
     })
     await callback.message.edit_text(f"{callback.from_user.first_name}, choose dictionary to delete:\n\n"
                                      + "=========================\n"
-                                     + "\n".join(f"{i}. {name}" for i, name in dictionaries), reply_markup=get_callback_btns(
-        btns=btns,
-        sizes=(4, 3, 2, 1)
-    ))
+                                     + "\n".join(f"{i}. {name}" for i, name in dictionaries),
+                                     reply_markup=get_callback_btns(
+                                         btns=btns,
+                                         sizes=calc_dict_btns(dictionaries)
+                                     ))
 
 
 @user_private_router.callback_query(F.data.startswith("lang_"), dict.first_language)
@@ -156,8 +153,22 @@ async def process_dict_name(callback: CallbackQuery, state: FSMContext):
 
 
 @user_private_router.callback_query(F.data.startswith("confirm_delete_"))
-async def confirm_delete_dict(callback: CallbackQuery):
+async def confirm_deleting(callback: CallbackQuery):
     dict_name = callback.data.split("_")[2]
+    await callback.message.edit_text(f"Confirm deleting dict {dict_name}", reply_markup=(
+        get_callback_btns(
+            btns={
+                "Confirm": f"delete_{dict_name}",
+                "Back": "back_to_dictionaries"
+            },
+            sizes=(1, 1)
+        )
+    ))
+
+
+@user_private_router.callback_query(F.data.startswith("delete_"))
+async def confirm_delete_dict(callback: CallbackQuery):
+    dict_name = callback.data.split("_")[1]
     await db.delete_dictionary(callback.from_user.id, dict_name)
     await callback.answer(f"✅ Dictionary '{dict_name}' deleted.")
     user_dictionaries = await db.get_user_dictionaries(callback.from_user.id)
@@ -171,15 +182,15 @@ async def confirm_delete_dict(callback: CallbackQuery):
         "Back": "back_to_functions"
     })
     await callback.message.edit_text(f"{callback.from_user.first_name}, your dictionaries:\n\n"
-                                    + "=========================\n"
-                                    + "\n".join(f"{i}. {name}" for i, name in dictionaries),
-                                    reply_markup=get_callback_btns(
-                                        btns=btns,
-                                        sizes=calc_dict_btns(dictionaries)
-                                    )
-                                )
-    
-    
+                                     + "=========================\n"
+                                     + "\n".join(f"{i}. {name}" for i, name in dictionaries),
+                                     reply_markup=get_callback_btns(
+                                         btns=btns,
+                                         sizes=calc_dict_btns(dictionaries)
+                                     )
+                                     )
+
+
 @user_private_router.callback_query(F.data == "back_to_dictionaries")
 async def back_to_dictionaries(callback: CallbackQuery, state: FSMContext):
     await state.clear()
@@ -200,8 +211,9 @@ async def back_to_dictionaries(callback: CallbackQuery, state: FSMContext):
                                          btns=btns,
                                          sizes=calc_dict_btns(dictionaries)
                                      )
-                                     )
-    
+                                 )
+
+
 @user_private_router.callback_query(F.data.startswith("lang_"), dict.second_language)
 async def process_second_lang_name(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
@@ -219,6 +231,7 @@ async def process_second_lang_name(callback: CallbackQuery, state: FSMContext):
         "Delete Dictionary": "delete_dict",
         "Back": "back_to_functions"
     })
+    await callback.answer(f"✅ Dictionary {first_language} -> {second_language} added successfully")
     await callback.message.edit_text(f"{callback.from_user.first_name}, your dictionaries:\n\n"
                                      + "=========================\n"
                                      + "\n".join(f"{i}. {name}" for i, name in dictionaries),
@@ -226,7 +239,7 @@ async def process_second_lang_name(callback: CallbackQuery, state: FSMContext):
                                          btns=btns,
                                          sizes=calc_dict_btns(dictionaries)
                                      )
-                                 )
+                                     )
 
 
 @user_private_router.callback_query(F.data == "back_to_functions")

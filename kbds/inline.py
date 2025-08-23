@@ -11,6 +11,8 @@ def get_callback_btns(*, btns: dict[str, str], sizes: tuple = (2,)):
 
 def calc_dict_btns(dictionaries):
     match len(dictionaries):
+        case 0:
+            return 2, 1
         case 1:
             return 1, 2, 1
         case 2:
