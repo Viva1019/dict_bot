@@ -34,17 +34,19 @@ class Database:
             )
             return dict(row) if row else None
 
+
     async def add_user(self, telegram_id: int):
         async with self.pool.acquire() as conn:
-            try:
-                await conn.execute(
-                    "INSERT INTO users (telegram_id, registration_date) VALUES ($1, NOW())",
-                    telegram_id,
-                )
-                print(f"✅ User {telegram_id} added.")
-            except Exception as e:
-                print(f"❌ Error adding user: {e}")
-
+            async with conn.transaction():
+                try:
+                    await conn.execute(
+                        "INSERT INTO users (telegram_id, registration_date) VALUES ($1, NOW())",
+                        telegram_id,
+                    )
+                    print(f"✅ User {telegram_id} added.")
+                except Exception as e:
+                    print(f"❌ Error adding user: {e}")
+                
     async def get_user_dictionaries(self, telegram_id: int) -> Optional[dict]:
         user = await self.get_user_data(telegram_id)
         if user and user.get("dictionaries"):
@@ -56,10 +58,11 @@ class Database:
 
     async def __update_dictionaries(self, telegram_id: int, dictionaries: dict):
         async with self.pool.acquire() as conn:
-            await conn.execute(
-                "UPDATE users SET dictionaries = $1 WHERE telegram_id = $2",
-                json.dumps(dictionaries), telegram_id
-            )
+            async with conn.transaction():
+                await conn.execute(
+                    "UPDATE users SET dictionaries = $1 WHERE telegram_id = $2",
+                    json.dumps(dictionaries), telegram_id
+                )
 
     async def add_user_dictionaries(self, telegram_id: int, dict_name: str):
         dictionaries = await self.get_user_dictionaries(telegram_id)
@@ -109,7 +112,7 @@ class Database:
 # async def main():
 #     db = Database(db_config)
 #     await db.connect()
-#     await db.delete_dictionary(1118960164, "dsa -> asd")
+#     print(len(await db.get_user_dictionaries(1118960164)))
 #     await db.close()
-    
+#
 # asyncio.run(main())

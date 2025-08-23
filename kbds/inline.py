@@ -10,7 +10,6 @@ def get_callback_btns(*, btns: dict[str, str], sizes: tuple = (2,)):
     return keyboard.adjust(*sizes).as_markup()
 
 def calc_dict_btns(dictionaries):
-    print(len(dictionaries))
     match len(dictionaries):
         case 1:
             return 1, 2, 1
