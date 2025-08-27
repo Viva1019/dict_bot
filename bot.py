@@ -8,7 +8,7 @@ from aiogram.enums import ParseMode
 from dotenv import find_dotenv, load_dotenv
 
 load_dotenv(find_dotenv())
-from handlers.user_private import user_private_router
+from handlers.user_private import dictionaries_router
 
 from db.init_db import db
 
@@ -25,7 +25,7 @@ bot = Bot(token=os.getenv('TOKEN'),
 
 dp = Dispatcher()
 
-dp.include_router(user_private_router)
+dp.include_router(dictionaries_router)
 
 
 async def on_startup():
