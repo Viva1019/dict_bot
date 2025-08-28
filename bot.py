@@ -7,18 +7,13 @@ from aiogram.enums import ParseMode
 
 from dotenv import find_dotenv, load_dotenv
 
-load_dotenv(find_dotenv())
 from handlers.dictionaries_router import dictionaries_router
+from handlers.tests_router import tests_router
 
 from db.init_db import db
 
-db_config = {
-    "database": os.getenv("DB_NAME"),
-    "user": os.getenv("DB_USER"),
-    "password": os.getenv("DB_PASSWORD"),
-    "host": os.getenv("DB_HOST"),
-    "port": os.getenv("DB_PORT")
-}
+load_dotenv(find_dotenv())
+
 
 bot = Bot(token=os.getenv('TOKEN'),
           default=DefaultBotProperties(parse_mode=ParseMode.HTML))
@@ -26,7 +21,7 @@ bot = Bot(token=os.getenv('TOKEN'),
 dp = Dispatcher()
 
 dp.include_router(dictionaries_router)
-
+dp.include_router(tests_router)
 
 async def on_startup():
     await db.connect()
@@ -42,8 +37,5 @@ async def main():
 
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
-
-
-
 
 asyncio.run(main())
