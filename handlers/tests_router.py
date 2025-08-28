@@ -22,120 +22,148 @@ from handlers.dictionaries_router import dict, emoji_nums
 tests_router = Router()
 tests_router.message.filter(ChatTypeFilter(chat_types=["private"]))
 
-
 def reverse_dict(dictionary):
-    temp_dictionary = {}
-    for i in dictionary.items():
-        temp_dictionary.update({i[1]: i[0]})
-    return temp_dictionary
+    """
+    Reverses the keys and values of a dictionary.
+    Adds an emoji to indicate reversed direction.
+    """
+    reversed_dict = {v: k for k, v in dictionary.items()}
+    return reversed_dict
 
 @tests_router.callback_query(F.data == "view_tests")
 async def view_tests(callback: CallbackQuery, state: FSMContext):
     await state.set_state(dict.on_test)
     user_dictionaries = await db.get_user_dictionaries(callback.from_user.id)
     dictionaries = list(enumerate(user_dictionaries.keys(), start=1))
-    btns = {emoji_nums[num]: f"choosetest_{dict_name}" for num, dict_name in dictionaries}
+    btns = {f"{emoji_nums[num]}": f"choosetest_{dict_name}" for num, dict_name in dictionaries}
     btns.update({
-        "Back": "back_to_functions"
+        "🔙 Back": "back_to_functions"
     })
 
+    dicts_text = "\n".join(f"{emoji_nums[num]} {dict_name}" for num, dict_name in dictionaries)
     await callback.message.edit_text(
-        f"{callback.from_user.first_name}, choose dictionary to test:\n\n"+
-        "\n=========================\n"+
-        "\n".join(f"{i}) {pair}" for i, pair in dictionaries),
+        f"📚 <b>{callback.from_user.first_name}</b>, choose a dictionary to test:\n\n"
+        f"{dicts_text if dicts_text else 'No dictionaries found.'}",
         reply_markup=get_callback_btns(
             btns=btns,
             sizes=calc_dict_btns(dictionaries)
-        )
+        ),
+        parse_mode="HTML"
     )
+    
 async def send_question(callback: CallbackQuery, state: FSMContext):
     """
-    Отправляет очередной вопрос пользователю.
-    Берёт данные из FSMContext (слова и индекс).
-    Если дошли до конца — перемешивает и начинает заново.
+    Sends the next question to the user.
+    Uses FSMContext for words and index.
+    If all words are shown, reshuffles and starts again.
     """
     data = await state.get_data()
     dict_name = data["selected_dict"]
     words_list = data["words_list"]
     current_index = data["current_index"]
 
-    # если все слова показаны — перемешиваем и начинаем заново
+    # If all words shown, reshuffle and restart
     if current_index >= len(words_list):
         random.shuffle(words_list)
         current_index = 0
         await state.update_data(words_list=words_list, current_index=current_index)
 
-    # текущее слово
+    # Current word and correct answer
     word, right_ans = words_list[current_index]
 
-    # варианты: правильный + 4 случайных других
+    # Prepare answer options: correct + up to 4 random wrong ones
     all_translations = [t for _, t in words_list if t != right_ans]
     wrong_answers = random.sample(all_translations, min(4, len(all_translations)))
     words_to_answer = [right_ans] + wrong_answers
     random.shuffle(words_to_answer)
 
-    # сохраняем прогресс
+    # Emojis for answer options
+    btns = {}
+    for ans in words_to_answer:
+        btns[f"{ans}"] = f"answer_{ans}_{right_ans}"
+
+    btns.update({"🔙 Back": "back_to_tests"})
+
+    # Save progress
     await state.update_data(
         words_to_answer=words_to_answer,
         right_ans=right_ans,
         question_word=word
     )
 
-    # кнопки
-    btns = {ans: f"answer_{ans}_{right_ans}" for ans in words_to_answer}
-    btns.update({"Back": "back_to_tests"})
-
     await callback.message.edit_text(
-        f"What is the translation of {word}?",
-        reply_markup=get_callback_btns(btns=btns, sizes=(3, 2, 1))
+        f"❓ <b>What is the translation of:</b> <code>{word}</code>?",
+        reply_markup=get_callback_btns(btns=btns, sizes=(3, 2, 1)),
+        parse_mode="HTML"
     )
 
 @tests_router.callback_query(F.data.startswith("choosetest_"))
 async def process_test_selection(callback: CallbackQuery, state: FSMContext):
-    dict_name = callback.data.split("_")[1]
+    dict_name = callback.data.split("_", 1)[1]
     splited_dict_name = dict_name.split(" -> ")
-    reversed_dict_name = " -> ".join([splited_dict_name[1], splited_dict_name[0]])
-    btns = {
-        dict_name: f"choose_test_{dict_name}",
-        reversed_dict_name: f"choose_test_reversed_{dict_name}",
-        "Back": "back_to_tests"
-    }
-    await callback.message.edit_text(
-        "Choose test option:",
-        reply_markup=get_callback_btns(
-            btns=btns,
-            sizes=(1, 1, 1)
-        )
-    )
-# старт теста
-@tests_router.callback_query(F.data.startswith("choose_test_"))
-async def process_test_selection(callback: CallbackQuery, state: FSMContext):
-    if "reversed" in callback.data:
-        dict_name = callback.data.split("_")[3]
-        words_from_dicts = await db.get_user_dictionaries(callback.from_user.id)
-        words_from_dict = reverse_dict(words_from_dicts[dict_name])
+    if len(splited_dict_name) == 2:
+        reversed_dict_name = " -> ".join([splited_dict_name[1], splited_dict_name[0]])
+        display_dict_name = f"➡️ {dict_name}"
+        display_reversed_name = f"🔄 {reversed_dict_name}"
     else:
-        dict_name = callback.data.split("_")[2]
-        words_from_dicts = await db.get_user_dictionaries(callback.from_user.id)
-        words_from_dict = words_from_dicts[dict_name]
+        reversed_dict_name = dict_name
+        display_dict_name = f"➡️ {dict_name}"
+        display_reversed_name = f"🔄 {dict_name}"
 
-    if len(words_from_dict) < 5:
+    words_from_dicts = await db.get_user_dictionaries(callback.from_user.id)
+
+    if dict_name not in words_from_dicts or len(words_from_dicts[dict_name]) < 5:
         await callback.answer(
-            f"Dictionary '{dict_name}' has less than 5 words. Please add more words to start a test.",
+            f"❗ Dictionary '{dict_name}' has less than 5 words. Please add more words to start a test.",
             show_alert=True
         )
         return
 
-    words_list = list(words_from_dict.items())
+    btns = {
+        display_dict_name: f"choose_test_{dict_name}",
+        display_reversed_name: f"choose_test_reversed_{dict_name}",
+        "🔙 Back": "back_to_tests"
+    }
+    await callback.message.edit_text(
+        "📝 <b>Choose test option:</b>",
+        reply_markup=get_callback_btns(
+            btns=btns,
+            sizes=(1, 1, 1)
+        ),
+        parse_mode="HTML"
+    )
+# старт теста
+@tests_router.callback_query(F.data.startswith("choose_test_"))
+async def start_test(callback: CallbackQuery, state: FSMContext):
+    data_parts = callback.data.split("_")
+    is_reversed = "reversed" in callback.data
+    dict_name = data_parts[3] if is_reversed else data_parts[2]
+    user_dicts = await db.get_user_dictionaries(callback.from_user.id)
+
+    if dict_name not in user_dicts:
+        await callback.answer("❗ Dictionary not found.", show_alert=True)
+        return
+
+    # Prepare dictionary (reverse if needed)
+    words_dict = reverse_dict(user_dicts[dict_name]) if is_reversed else user_dicts[dict_name]
+    words_list = list(words_dict.items())
     random.shuffle(words_list)
+
+    # Emoji for test direction
+    emoji = "🔄" if is_reversed else "➡️"
 
     await state.set_state(dict.on_test)
     await state.update_data(
         selected_dict=dict_name,
         words_list=words_list,
-        current_index=0
+        current_index=0,
+        is_reversed=is_reversed
     )
 
+    await callback.message.edit_text(
+        f"{emoji} <b>Test started!</b>\nDictionary: <b>{dict_name}</b>\n\nLet's begin!",
+        parse_mode="HTML"
+    )
     await send_question(callback, state)
 
 
@@ -147,7 +175,7 @@ async def process_answer(callback: CallbackQuery, state: FSMContext):
     right_ans = data["right_ans"]
     words_to_answer = data["words_to_answer"]
 
-    # отметки
+    # Add emoji for correct/incorrect answers
     marked_answers = []
     for word in words_to_answer:
         if word == right_ans:
@@ -155,15 +183,26 @@ async def process_answer(callback: CallbackQuery, state: FSMContext):
         elif word == current_ans:
             marked_answers.append(f"❌ {word}")
         else:
-            marked_answers.append(word)
+            marked_answers.append(f"▫️ {word}")
 
-    btns = {word: f"answer_{word}_{right_ans}" for word in marked_answers}
-    btns.update({"Next question": "next_question", "Back": "back_to_tests"})
+    # Disable answer buttons after selection
+    btns = {}
+    for word in marked_answers:
+        btns[word] = "noop"
+    btns.update({
+        "➡️ Next question": "next_question",
+        "🔙 Back": "back_to_tests"
+    })
 
-    prefix = "✅ Correct!\n" if current_ans == right_ans else "❌ Incorrect!\n"
+    if current_ans == right_ans:
+        prefix = "🎉 <b>Correct!</b>\n"
+    else:
+        prefix = f"😔 <b>Incorrect!</b>\n<b>Correct answer:</b> {right_ans}\n"
+
     await callback.message.edit_text(
         prefix + callback.message.text,
-        reply_markup=get_callback_btns(btns=btns, sizes=(3, 2, 1, 1))
+        reply_markup=get_callback_btns(btns=btns, sizes=(3, 2, 1, 1)),
+        parse_mode="HTML"
     )
 
     await state.set_state(dict.answered)
@@ -179,26 +218,26 @@ async def next_question(callback: CallbackQuery, state: FSMContext):
     await state.set_state(dict.on_test)
     await send_question(callback, state)
 
-
 @tests_router.callback_query(F.data.startswith("answer_"), dict.answered)
-async def procces_answer_after_answered(callback: CallbackQuery):
-    await callback.answer()
+async def process_answer_after_answered(callback: CallbackQuery):
+    await callback.answer("❗ Please press 'Next question' to continue.", show_alert=True)
 
 @tests_router.callback_query(F.data == "back_to_tests", or_f(StateFilter(dict.on_test), StateFilter(dict.answered)))
 async def back_to_tests(callback: CallbackQuery, state: FSMContext):
     user_dictionaries = await db.get_user_dictionaries(callback.from_user.id)
     dictionaries = list(enumerate(user_dictionaries.keys(), start=1))
-    btns = {emoji_nums[num]: f"choosetest_{dict_name}" for num, dict_name in dictionaries}
+    btns = {f"{emoji_nums[num]}": f"choosetest_{dict_name}" for num, dict_name in dictionaries}
     btns.update({
-        "Back": "back_to_functions"
+        "🔙 Back": "back_to_functions"
     })
 
+    dicts_text = "\n".join(f"{emoji_nums[num]} {dict_name}" for num, dict_name in dictionaries)
     await callback.message.edit_text(
-        f"{callback.from_user.first_name}, choose dictionary to test:\n\n"+
-        "\n=========================\n"+
-        "\n".join(f"{i}) {pair}" for i, pair in dictionaries),
+        f"📚 <b>{callback.from_user.first_name}</b>, choose a dictionary to test:\n\n"
+        f"{dicts_text if dicts_text else 'No dictionaries found.'}",
         reply_markup=get_callback_btns(
             btns=btns,
             sizes=calc_dict_btns(dictionaries)
-        )
+        ),
+        parse_mode="HTML"
     )
