@@ -19,14 +19,6 @@ from db.init_db import db
 dictionaries_router = Router()
 dictionaries_router.message.filter(ChatTypeFilter(chat_types=["private"]))
 
-db_config = {
-    "database": os.getenv("DB_NAME"),
-    "user": os.getenv("DB_USER"),
-    "password": os.getenv("DB_PASSWORD"),
-    "host": os.getenv("DB_HOST"),
-    "port": os.getenv("DB_PORT")
-}
-
 emoji_nums = {
     1: "1️⃣",
     2: "2️⃣",
@@ -379,3 +371,4 @@ async def back_to_functions(callback: CallbackQuery):
             sizes=(2, 1)
         )
     )
+
