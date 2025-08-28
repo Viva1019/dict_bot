@@ -53,6 +53,9 @@ class dict(StatesGroup):
     first_word = State()
     second_word = State()
 
+    on_test = State()
+    answered = State()
+    
     deleting_word = State()
     searching_word = State()
     dict_is_open = State()
@@ -68,28 +71,6 @@ def get_btns_menu_dict(dict_name):
         "✏️ Edit Words": "edit_words",
         "🔙 Back": "back_to_dictionaries"
     }
-
-async def check_user(user_id: int) -> bool:
-    user_data_local = await db.get_user_data(user_id)
-    if not user_data_local:
-        await db.add_user(user_id)
-    return True
-
-@dictionaries_router.message(CommandStart())
-async def cmd_start(message: types.Message):
-    await check_user(message.from_user.id)
-
-    await message.answer(
-        "👋 Hello!\n\n"
-        "Welcome to the bot where you can create your own language dictionaries 📚 and practice memorizing words 📝.",
-        reply_markup=get_callback_btns(
-            btns={
-                "📚 My Dictionaries": "view_dicts",
-                "📝 Tests": "view_tests"
-            },
-            sizes=(2, 1)
-        )
-    )
 
 @dictionaries_router.callback_query(F.data == "view_dicts")
 async def view_dicts(callback: CallbackQuery):
@@ -391,7 +372,7 @@ async def request_word_for_delete(message: types.Message, state: FSMContext):
 
     await message.answer(
         f"📖 <b>{dict_name}</b>\n=========================\n" +
-        "\n".join(f"{i+1}) {pair[0]} - {pair[1]}" for i, pair in current_dict) if current_dict else "📖 <b>{dict_name}</b>\n\nNo words in this dictionary yet.",
+        "\n".join(f"{i+1}) {pair[0]} - {pair[1]}" for i, pair in current_dict) if current_dict else f"📖 <b>{dict_name}</b>\n\nNo words in this dictionary yet.",
         reply_markup=get_callback_btns(
             btns=btns,
             sizes=(2, 3, 2, 1)
@@ -438,7 +419,7 @@ async def request_word2(message: types.Message, state: FSMContext):
         await message.answer("Both words must be provided.")
         return
 
-    await db.add_word_to_dict(message.from_user.id, dict_name, word1, word2)
+    await db.add_word_to_dict(message.from_user.id, dict_name, f"{word1}:{word2}")
     await state.set_state(dict.dict_is_open)
     dictionaries = await db.get_user_dictionaries(message.from_user.id)
     current_dict = list(enumerate(dictionaries[dict_name].items()))

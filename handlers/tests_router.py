@@ -22,6 +22,7 @@ from handlers.dictionaries_router import dict, emoji_nums
 tests_router = Router()
 tests_router.message.filter(ChatTypeFilter(chat_types=["private"]))
 
+
 def reverse_dict(dictionary):
     """
     Reverses the keys and values of a dictionary.
