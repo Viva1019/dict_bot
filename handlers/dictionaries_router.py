@@ -54,8 +54,20 @@ class dict(StatesGroup):
     second_word = State()
 
     deleting_word = State()
+    searching_word = State()
     dict_is_open = State()
 
+def get_btns_menu_dict(dict_name):
+    return {
+        "<" : "swipe_left",
+        ">" : "swipe_right",
+        "Select page" : f"go_to_page.{dict_name}",
+        "Search words" : f"search_words.{dict_name}",
+        "Add words" : f"add_words.{dict_name}",
+        "Delete words" : f"delete_words.{dict_name}",
+        "Edit words" : "edit_words",
+        "Back" : "back_to_dictionaries"
+    }
 
 async def check_user(user_id: int) -> bool:
     user_data_local = await db.get_user_data(user_id)
@@ -239,14 +251,7 @@ async def open_dict(callback: CallbackQuery, state: FSMContext):
     dictionaries = await db.get_user_dictionaries(callback.from_user.id)
     current_dict = enumerate(dictionaries[dict_name].items())
     await state.update_data(current_dict=current_dict)
-    btns={
-        "<" : "swipe_left",
-        ">" : "swipe_right",
-        "Add words" : f"add_words.{dict_name}",
-        "Delete words" : f"delete_words.{dict_name}",
-        "Edit words" : "edit_words",
-        "Back" : "back_to_dictionaries"
-    }
+    btns=get_btns_menu_dict(dict_name)
 
     await callback.message.edit_text(
         f"{dict_name}"+
@@ -254,9 +259,47 @@ async def open_dict(callback: CallbackQuery, state: FSMContext):
         "\n".join(f"{i+1}){pair[0]} - {pair[1]}" for i, pair in current_dict),
         reply_markup=get_callback_btns(
             btns=btns,
-            sizes=(2,1,1,1,1)
+            sizes=(2,3,2,1,1)
         )
     )
+
+@dictionaries_router.callback_query(F.data.startswith("search_words"))
+async def search_words(callback: CallbackQuery, state: FSMContext):
+    await state.set_state(dict.searching_word)
+    data = await state.get_data()
+    dict_name = data.get("dict_name")
+    await callback.message.answer("Enter any word from the pair",
+                                    reply_markup=get_callback_btns(
+                                        btns={"Back" : f"view_dict_{dict_name}"}
+                                    ))
+
+@dictionaries_router.message(dict.searching_word)
+async def request_search(message: types.Message, state: FSMContext):
+    word = message.text
+    data = await state.get_data()
+    dict_name = data.get("dict_name")
+    dictionaries = await db.get_user_dictionaries(message.from_user.id)
+    current_dict = dictionaries[dict_name]
+    translation=''
+    if word in current_dict:
+        translation = current_dict[word]
+        await message.answer(f"Translation of the word {word}: {translation}")
+    elif word in current_dict.values():
+        for key in current_dict:
+            if current_dict[key] == word:
+                translation = key
+        await message.answer(f"Translation of the word {word}: {translation}")
+    else:
+        await message.answer("there is no such word in this dictionary")
+    btns=get_btns_menu_dict(dict_name)
+    await message.answer(
+        f"{dict_name}"+
+        "\n=========================\n"+
+        "\n".join(f"{i+1}){pair[0]} - {pair[1]}" for i, pair in current_dict),
+        reply_markup=get_callback_btns(
+            btns=btns,
+            sizes=(2,1,1,1,1)
+        ))
 
 @dictionaries_router.callback_query(F.data.startswith("delete_words"))
 async def delete_words(callback: CallbackQuery, state: FSMContext):
@@ -266,8 +309,7 @@ async def delete_words(callback: CallbackQuery, state: FSMContext):
     await callback.message.edit_text("Enter any word from the pair",
                                     reply_markup=get_callback_btns(
                                         btns={"Back" : f"view_dict_{dict_name}"}
-                                    )
-                                  )
+                                    ))
 
 @dictionaries_router.message(dict.deleting_word)
 async def request_word_for_delete(message: types.Message, state: FSMContext):
@@ -289,14 +331,7 @@ async def request_word_for_delete(message: types.Message, state: FSMContext):
     await state.set_state(dict.dict_is_open)
     dictionaries = await db.get_user_dictionaries(message.from_user.id)
     current_dict = enumerate(dictionaries[dict_name].items())
-    btns={
-        "<" : "swipe_left",
-        ">" : "swipe_right",
-        "Add words" : f"add_words.{dict_name}",
-        "Delete words" : "delete_words",
-        "Edit words" : "edit_words",
-        "Back" : "back_to_dictionaries"
-    }
+    btns=get_btns_menu_dict(dict_name)
     await message.answer(
         f"{dict_name}"+
         "\n=========================\n"+
@@ -314,9 +349,8 @@ async def add_words(callback: CallbackQuery, state: FSMContext):
     dict_name = data.get("dict_name")
     await callback.message.edit_text("Enter first word",
                                     reply_markup=get_callback_btns(
-                                        btns={"Back" : f"view_dict_{dict_name}"}
-                                    )
-                                  )
+                                    btns={"Back" : f"view_dict_{dict_name}"}
+                                    ))
     
 @dictionaries_router.message(dict.first_word)
 async def request_word1(message: types.Message, state: FSMContext):
@@ -325,10 +359,9 @@ async def request_word1(message: types.Message, state: FSMContext):
     data = await state.get_data()
     dict_name = data.get("dict_name")
     await message.answer("Enter second word",
-                                    reply_markup=get_callback_btns(
-                                        btns={"Back" : f"view_dict_{dict_name}"}
-                                    )
-                                  )
+                        reply_markup=get_callback_btns(
+                        btns={"Back" : f"view_dict_{dict_name}"}
+                        ))
 
 @dictionaries_router.message(dict.second_word)
 async def request_word2(message: types.Message, state: FSMContext):
@@ -337,17 +370,10 @@ async def request_word2(message: types.Message, state: FSMContext):
     dict_name = data.get("dict_name")
     pair = data.get("word1") + ':' + data.get("word2")
     await db.add_word_to_dict(message.from_user.id, dict_name, pair)
-    await state.clear()
+    await state.set_state(dict.dict_is_open)
     dictionaries = await db.get_user_dictionaries(message.from_user.id)
     current_dict = enumerate(dictionaries[dict_name].items())
-    btns={
-        "<" : "swipe_left",
-        ">" : "swipe_right",
-        "Add words" : f"add_words.{dict_name}",
-        "Delete words" : "delete_words",
-        "Edit words" : "edit_words",
-        "Back" : "back_to_dictionaries"
-    }
+    btns=get_btns_menu_dict(dict_name)
 
     await message.answer(
         f"{dict_name}"+
@@ -371,4 +397,3 @@ async def back_to_functions(callback: CallbackQuery):
             sizes=(2, 1)
         )
     )
-
