@@ -19,6 +19,14 @@ from db.init_db import db
 dictionaries_router = Router()
 dictionaries_router.message.filter(ChatTypeFilter(chat_types=["private"]))
 
+db_config = {
+    "database": os.getenv("DB_NAME"),
+    "user": os.getenv("DB_USER"),
+    "password": os.getenv("DB_PASSWORD"),
+    "host": os.getenv("DB_HOST"),
+    "port": os.getenv("DB_PORT")
+}
+
 emoji_nums = {
     1: "1️⃣",
     2: "2️⃣",
@@ -53,9 +61,6 @@ class dict(StatesGroup):
     first_word = State()
     second_word = State()
 
-    on_test = State()
-    answered = State()
-
     deleting_word = State()
     dict_is_open = State()
 
@@ -66,7 +71,7 @@ async def check_user(user_id: int) -> bool:
         await db.add_user(user_id)
     return True
 
-@dictionaries_router.message(CommandStart(), StateFilter(None))
+@dictionaries_router.message(CommandStart())
 async def cmd_start(message: types.Message):
     await check_user(message.from_user.id)
 
@@ -264,7 +269,6 @@ async def open_dict(callback: CallbackQuery, state: FSMContext):
 @dictionaries_router.callback_query(F.data.startswith("delete_words"))
 async def delete_words(callback: CallbackQuery, state: FSMContext):
     await state.set_state(dict.deleting_word)
-    await state.update_data(dict_name=callback.data.split('.')[1])
     data = await state.get_data()
     dict_name = data.get("dict_name")
     await callback.message.edit_text("Enter any word from the pair",
@@ -275,9 +279,8 @@ async def delete_words(callback: CallbackQuery, state: FSMContext):
 
 @dictionaries_router.message(dict.deleting_word)
 async def request_word_for_delete(message: types.Message, state: FSMContext):
-    await state.update_data(word = message.text)
+    word = message.text
     data = await state.get_data()
-    word = data.get("word")
     dict_name = data.get("dict_name")
     dictionaries = await db.get_user_dictionaries(message.from_user.id)
     current_dict = dictionaries[dict_name]
@@ -291,7 +294,7 @@ async def request_word_for_delete(message: types.Message, state: FSMContext):
     else:
         await message.answer("there is no such word in this dictionary")
     await db.delete_word_from_dict(message.from_user.id, dict_name, word_to_delete)
-    await state.clear()
+    await state.set_state(dict.dict_is_open)
     dictionaries = await db.get_user_dictionaries(message.from_user.id)
     current_dict = enumerate(dictionaries[dict_name].items())
     btns={
@@ -315,7 +318,6 @@ async def request_word_for_delete(message: types.Message, state: FSMContext):
 @dictionaries_router.callback_query(F.data.contains("add_words"))
 async def add_words(callback: CallbackQuery, state: FSMContext):
     await state.set_state(dict.first_word)
-    await state.update_data(dict_name=callback.data.split('.')[1])
     data = await state.get_data()
     dict_name = data.get("dict_name")
     await callback.message.edit_text("Enter first word",
@@ -377,4 +379,3 @@ async def back_to_functions(callback: CallbackQuery):
             sizes=(2, 1)
         )
     )
-
