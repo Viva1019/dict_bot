@@ -77,6 +77,8 @@ class Database:
 
         try:
             word1, word2 = word.split(":")
+            word1 = word1.lower()
+            word2 = word2.lower()
             dictionaries[dict_name][word1.strip()] = word2.strip()
         except ValueError:
             print("❌ Invalid word format. Use 'word:translation'.")
@@ -93,6 +95,22 @@ class Database:
         else:
             print(f"❌ Word '{word}' not found in dictionary '{dict_name}'.")
 
+    async def edit_word_in_dict(self, telegram_id: int, dict_name: str, word: str, new_translation: str):
+        dictionaries = await self.get_user_dictionaries(telegram_id)
+        current_dict = dictionaries[dict_name]
+
+        if dict_name in dictionaries and word in current_dict:
+            current_dict[new_translation] = current_dict.pop(word)
+            await self.__update_dictionaries(telegram_id, dictionaries)
+        elif dict_name in dictionaries and word in current_dict.values():
+            for key in current_dict:
+                if current_dict[key] == word:
+                    current_dict[key] = new_translation
+                    break
+            await self.__update_dictionaries(telegram_id, dictionaries)
+        else:
+            print(f"❌ Word '{word}' not found in dictionary '{dict_name}'.")
+
     async def delete_dictionary(self, telegram_id: int, dict_name: str):
         dictionaries = await self.get_user_dictionaries(telegram_id)
 
@@ -102,17 +120,3 @@ class Database:
         else:
             print(f"❌ Dictionary '{dict_name}' not found for user {telegram_id}.")
 
-# db_config = {
-#     "database": os.getenv("DB_NAME"),
-#     "user": os.getenv("DB_USER"),
-#     "password": os.getenv("DB_PASSWORD"),
-#     "host": os.getenv("DB_HOST"),
-#     "port": os.getenv("DB_PORT")
-# }
-# async def main():
-#     db = Database(db_config)
-#     await db.connect()
-#     print(len(await db.get_user_dictionaries(1118960164)))
-#     await db.close()
-#
-# asyncio.run(main())
