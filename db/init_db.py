@@ -1,3 +1,4 @@
+import asyncio
 import os
 from db.models import Database
 
@@ -14,3 +15,4 @@ db_config = {
 
 
 db = Database(db_config)
+

@@ -9,6 +9,7 @@ from dotenv import load_dotenv, find_dotenv
 
 load_dotenv(find_dotenv())
 
+
 class Database:
     def __init__(self, db_config: dict):
         self.db_config = db_config
@@ -34,7 +35,6 @@ class Database:
             )
             return dict(row) if row else None
 
-
     async def add_user(self, telegram_id: int):
         async with self.pool.acquire() as conn:
             async with conn.transaction():
@@ -46,7 +46,7 @@ class Database:
                     print(f"✅ User {telegram_id} added.")
                 except Exception as e:
                     print(f"❌ Error adding user: {e}")
-                
+
     async def get_user_dictionaries(self, telegram_id: int) -> Optional[dict]:
         user = await self.get_user_data(telegram_id)
         if user and user.get("dictionaries"):
@@ -119,4 +119,3 @@ class Database:
             await self.__update_dictionaries(telegram_id, dictionaries)
         else:
             print(f"❌ Dictionary '{dict_name}' not found for user {telegram_id}.")
-
